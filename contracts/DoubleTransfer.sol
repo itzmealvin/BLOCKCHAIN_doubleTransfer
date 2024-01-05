@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./Percentages.sol";
-
-contract DoubleTransfer is Percentages {
+contract DoubleTransfer {
     enum Stages {
         CANCELLED,
         INIT,
@@ -12,6 +10,7 @@ contract DoubleTransfer is Percentages {
 
     struct Order {
         uint256 nonce;
+        uint256 time;
         address sender;
         address receiver;
         uint256 amount;
@@ -19,53 +18,76 @@ contract DoubleTransfer is Percentages {
     }
 
     mapping(address => mapping(uint => Order)) userOrders;
-    mapping(address => uint) userNonce;
-    address owner;
-    uint256 escrowAmount;
-    uint256 rate = 11_000;
+    mapping(address => uint) userCurrentNonce;
+    mapping(address => uint[]) userNonces;
+    address public owner;
+    uint256 public escrowAmount;
 
     constructor() payable {
         owner = msg.sender;
-        address(this).call{value: 10 ether}("");
     }
 
-    function initializaOrder(address _receiver, uint _amount) external payable {
-        require(_amount > 0, "Must send Ether with the function call");
-        (bool s, ) = address(this).call{value: calculate(_amount, rate)}("");
+    receive() external payable {}
+
+    function initializeOrder(address _receiver, uint256 _fee) external payable {
+        require(msg.value > _fee, "Must send Ether with the function call");
+        (bool s, ) = address(this).call{value: msg.value}("");
         require(s, "Error in transfer");
-        escrowAmount += _amount;
-        userOrders[msg.sender][userNonce[msg.sender]++] = Order(
-            userNonce[msg.sender],
+        escrowAmount += msg.value - _fee;
+        userOrders[msg.sender][userCurrentNonce[msg.sender]++] = Order(
+            userCurrentNonce[msg.sender],
+            block.timestamp,
             msg.sender,
             _receiver,
-            _amount,
+            msg.value - _fee,
             Stages.INIT
         );
+        userNonces[msg.sender].push(userCurrentNonce[msg.sender]);
     }
 
     function confirmOrder(uint _nonce) external payable {
         Order storage orderDetails = userOrders[msg.sender][_nonce];
-        require(orderDetails.stage == Stages.INIT, "Order completed");
-        orderDetails.stage = Stages.SENT;
+        require(
+            orderDetails.stage == Stages.INIT,
+            "Order completed or not existed"
+        );
         (bool s, ) = orderDetails.receiver.call{value: orderDetails.amount}("");
         require(s, "Error in transfer");
+        orderDetails.stage = Stages.SENT;
         escrowAmount -= orderDetails.amount;
     }
 
     function modifySender(uint _nonce, address _newSender) external {
         Order storage orderDetails = userOrders[msg.sender][_nonce];
-        require(orderDetails.stage == Stages.INIT, "Order completed");
+        require(
+            orderDetails.stage == Stages.INIT,
+            "Order completed or not existed"
+        );
         orderDetails.receiver = _newSender;
     }
 
     function cancelOrder(uint _nonce) external {
         Order storage orderDetails = userOrders[msg.sender][_nonce];
-        require(orderDetails.stage == Stages.INIT, "Order completed");
+        require(
+            orderDetails.stage == Stages.INIT,
+            "Order completed or not existed"
+        );
+        (bool s, ) = orderDetails.sender.call{value: orderDetails.amount}("");
+        require(s, "Error in transfer");
         orderDetails.stage = Stages.CANCELLED;
+        escrowAmount -= orderDetails.amount;
     }
 
     function viewOrder(uint _nonce) external view returns (Order memory) {
         return userOrders[msg.sender][_nonce];
+    }
+
+    function viewCurrentNonces() external view returns (uint[] memory) {
+        return userNonces[msg.sender];
+    }
+
+    function viewContractBalance() external view returns (uint256) {
+        return address(this).balance;
     }
 
     function withdrawFee() external payable {
@@ -76,8 +98,9 @@ contract DoubleTransfer is Percentages {
         require(s);
     }
 
-    function modifyRate(uint256 _newRate) external {
-        require(owner == msg.sender && _newRate > 11_000);
-        rate = _newRate;
+    function rechargeFee() external payable {
+        require(owner == msg.sender);
+        (bool s, ) = address(this).call{value: msg.value}("");
+        require(s, "Error in transfer");
     }
 }
