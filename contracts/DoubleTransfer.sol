@@ -86,8 +86,8 @@ contract DoubleTransfer {
         return userNonces[msg.sender];
     }
 
-    function viewContractBalance() external view returns (uint256) {
-        return address(this).balance;
+    function viewAvailableFee() external view returns (uint256) {
+        return address(this).balance - escrowAmount;
     }
 
     function withdrawFee() external payable {
