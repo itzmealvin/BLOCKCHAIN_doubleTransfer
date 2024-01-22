@@ -2,40 +2,37 @@
 pragma solidity ^0.8;
 
 contract DoubleTransfer {
-    // define the stages of order
-    enum Stages {
-        CANCELLED,
-        INIT,
+    // create additional stats for contracts
+    address payable public owner;
+    uint256[2] public totalStats; // first is totalTxn, second is totalVolume
+    uint256 private totalEscrowing;
+    uint64 public fee = 100_000 gwei;
+    Order[] public allOrders;
+
+    // create enumurate Status
+    enum Status {
+        NOT_INIT,
+        CREATED,
         SENT
     }
 
     // define the Order structure
     struct Order {
-        uint256 nonce;
-        uint256 time;
-        address sender;
+        uint256 timestamp;
         address receiver;
         uint256 amount;
-        Stages stage;
     }
 
-    // create additional stats for contracts
-    address payable public owner;
-    uint256 public totalVolume;
-    uint256 private escrowAmount;
-    uint64 public fee = 100_000 gwei;
-
     // mapping to check orders, nonce, and stats
-    mapping(address => mapping(uint => Order)) userOrders;
-    mapping(address => uint) userCurrentNonce;
-    mapping(address => uint[2]) userStats;
-    mapping(address => uint[]) userNonces;
+    mapping(uint256 => Status) private orderStatus;
+    mapping(address => uint[2]) private userStats; // first is userTxn, second is userVolume
+    mapping(uint256 => address) private orderSender;
 
     // create this event for our React.app to use
-    event initializeOrder(address _receiver);
-    event confirmOrder(address _receiver);
-    event changeReceiver(address _receiver);
-    event cancelOrder(address _receiver);
+    event createOrder(address _receiver, uint256 _currentIndex);
+    event confirmOrder(Order _orderCompleted);
+    event changeReceiver(address _newReceiver);
+    event cancelOrder(Order _orderCancelled);
 
     // set deployer address as the owner
     constructor() payable {
@@ -47,7 +44,7 @@ contract DoubleTransfer {
 
     // check if only the address of the owner
     modifier onlyOwner() {
-        require(owner == msg.sender);
+        require(msg.sender == owner, "You are not the owner");
         _;
     }
 
@@ -63,12 +60,19 @@ contract DoubleTransfer {
     }
 
     // step 1: initialize an order
-    function initializeNewOrder(address _receiver) external payable onlyHuman {
-        require(msg.value > fee, "Must send Ether with the function call");
+    function createNewOrder(address _receiver) external payable onlyHuman {
+        require(
+            msg.value > fee,
+            "Must send enough Ether with the function call"
+        );
         (bool s, ) = address(this).call{value: msg.value}("");
         require(s, "Error in transfer");
-        uint256 finalValue = msg.value - fee;
-        escrowAmount += finalValue; // this is total held by protocol
+        uint256 amount = msg.value - fee;
+        totalEscrowing += finalValue;
+        Order memory tempOrder = Order(block.timestamp, _receiver, amount);
+        orderStatus[allOrders.length] = Status.CREATED;
+        totalStats
+
         userOrders[msg.sender][userCurrentNonce[msg.sender]++] = Order(
             userCurrentNonce[msg.sender],
             block.timestamp,
@@ -87,7 +91,7 @@ contract DoubleTransfer {
         require(s, "Error in transfer");
         orderDetails.stage = Stages.SENT;
         uint256 actualAmount = orderDetails.amount;
-        escrowAmount -= actualAmount;
+        totalEscrowing -= actualAmount;
         totalVolume += actualAmount; // this is the total volume of the protocol
         userStats[msg.sender][0]++; // this is the total txns of the sender
         userStats[msg.sender][1] += actualAmount; // this is the the volume of sender
@@ -108,7 +112,7 @@ contract DoubleTransfer {
         (bool s, ) = orderDetails.sender.call{value: orderDetails.amount}("");
         require(s, "Error in transfer");
         orderDetails.stage = Stages.CANCELLED;
-        escrowAmount -= orderDetails.amount;
+        totalEscrowing -= orderDetails.amount;
     }
 
     // view specific order
@@ -120,13 +124,9 @@ contract DoubleTransfer {
     }
 
     // check if order is valid and returns it
-    function checkOrder(uint _nonce) private view returns (Order storage) {
-        Order storage orderDetails = userOrders[msg.sender][_nonce];
-        require(
-            orderDetails.stage == Stages.INIT,
-            "Order completed or not existed"
-        );
-        return orderDetails;
+    modifier checkOrder(uint256 _nonce) {
+        require(isSent[_nonce], "Order is completed");
+        _;
     }
 
     // view current sender nonces
@@ -138,7 +138,7 @@ contract DoubleTransfer {
 
     // FOR OWNER: view available fee to withdraw
     function viewAvailableFee() public view returns (uint256) {
-        return address(this).balance - escrowAmount;
+        return address(this).balance - totalEscrowing;
     }
 
     // FOR OWNER: set new fee to charge
@@ -159,9 +159,9 @@ contract DoubleTransfer {
         require(s, "Error in transfer");
     }
 
-    // FOR OWNER: destruct the contract
+    // FOR OWNER: self-destruct the contract
     function close() public onlyOwner {
-        require(escrowAmount == 0, "There is still users' escrowed here");
+        require(totalEscrowing == 0, "There is still users' escrowed here");
         selfdestruct(owner);
     }
 }
