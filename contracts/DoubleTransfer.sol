@@ -25,8 +25,8 @@ contract DoubleTransfer {
     }
 
     // mapping to check orders, nonce, and stats
-    mapping(uint256 => Status) private orderStatus;
     mapping(address => uint[2]) private userStats; // first is userTxn, second is userVolume
+    mapping(uint256 => Status) private orderStatus;
     mapping(uint256 => address) private orderSender;
 
     // create this event for our React.app to use
@@ -84,6 +84,8 @@ contract DoubleTransfer {
         allOrders.push(tempOrder);
         orderStatus[tempOrder.orderId] = Status.CREATED;
         orderSender[tempOrder.orderId] = msg.sender;
+        totalStats[0]++;
+        userStats[msg.sender][0]++; // this is the total txns of the sender
     }
 
     // step 2a: confirm this order, this cannot be undone
@@ -98,9 +100,7 @@ contract DoubleTransfer {
         orderStatus[_orderId] = Status.COMPLETED;
         uint256 amount = selectedOrder.amount;
         totalEscrowing -= amount;
-        totalStats[0]++;
         totalStats[1] += amount;
-        userStats[msg.sender][0]++; // this is the total txns of the sender
         userStats[msg.sender][1] += amount; // this is the the volume of sender
     }
 
@@ -122,6 +122,8 @@ contract DoubleTransfer {
         require(s, "Error in transfer");
         orderStatus[_orderId] = Status.CANCELLED;
         totalEscrowing -= selectedOrder.amount;
+        totalStats[0]--;
+        userStats[msg.sender][0]--; // this is the total txns of the sender
     }
 
     // view specific order
@@ -129,13 +131,23 @@ contract DoubleTransfer {
         return allOrders[_orderId];
     }
 
-    // view all orders of an address
-    function viewAllOrdersIdOfAddress()
+    // view current order sender
+    function viewOrderSender(uint _orderId) external view returns (address) {
+        return orderSender[_orderId];
+    }
+
+    // view current order status
+    function viewOrderStatus(uint _orderId) external view returns (Status) {
+        return orderStatus[_orderId];
+    }
+
+    // view all orders of current address
+    function viewAllOrderIdsOfAddress()
         external
         view
         returns (uint256[] memory)
     {
-        uint256[] memory results = new uint256[](userStats[msg.sender][1]);
+        uint256[] memory results = new uint256[](userStats[msg.sender][0]);
         uint counter = 0;
         for (uint i = 0; i < allOrders.length; i++) {
             if (orderSender[i] == msg.sender) {
@@ -146,12 +158,12 @@ contract DoubleTransfer {
         return results;
     }
 
-    // view current sender nonces
+    // view current user stats
     function viewUserCurrentStats() external view returns (uint[2] memory) {
         return userStats[msg.sender];
     }
 
-    // view current sender nonces
+    // view current protocol stats
     function viewTotalCurrentStats() external view returns (uint[2] memory) {
         return totalStats;
     }
