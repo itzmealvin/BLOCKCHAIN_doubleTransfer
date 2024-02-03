@@ -122,7 +122,6 @@ contract DoubleTransfer {
         require(s, "Error in transfer");
         orderStatus[_orderId] = Status.CANCELLED;
         totalEscrowing -= selectedOrder.amount;
-        totalStats[0]--;
         userStats[msg.sender][0]--; // this is the total txns of the sender
     }
 
@@ -147,7 +146,7 @@ contract DoubleTransfer {
         view
         returns (uint256[] memory)
     {
-        uint256[] memory results = new uint256[](userStats[msg.sender][0]);
+        uint256[] memory results = new uint256[](totalStats[0]);
         uint counter = 0;
         for (uint i = 0; i < allOrders.length; i++) {
             if (orderSender[i] == msg.sender) {
