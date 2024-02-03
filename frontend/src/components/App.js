@@ -14,6 +14,11 @@ const App = () => {
   const [myStats, setMyStats] = useState([2]);
   const [protocolStats, setProtocolStats] = useState([2]);
   const [currentFee, setCurrentFee] = useState();
+  const statusDict = {
+    0: "CANCELLED",
+    1: "CREATED",
+    2: "COMPLETED",
+  };
 
   const targetNetworkId = "0xaa36a7";
   const contractAddress = deployedAddress.address;
@@ -129,12 +134,13 @@ const App = () => {
     }
   };
 
-  const createnewOrderFn = async () => {
+  const createNewOrderFn = async () => {
     await handleNetworkCheck();
-    let finalValue =
-      newOrder.value + ethers.utils.parseEther(getContract().viewCurrentFee());
-    const txn = await getContract().createnewOrder(newOrder.address, {
-      value: finalValue,
+    let totalAmount = (
+      parseFloat(newOrder.value) + parseFloat(currentFee)
+    ).toString();
+    const txn = await getContract().createNewOrder(newOrder.address, {
+      value: ethers.utils.parseUnits(totalAmount, 18),
     });
     await txn.wait();
     alert("Order created successfully!");
@@ -158,7 +164,7 @@ const App = () => {
     await handleNetworkCheck();
     const txn = await getContract().modifyCurrentReceiver(
       selectedId.orderId,
-      newOrder.receiver
+      newOrder.address
     );
     await txn.wait();
     alert("Receiver modified");
@@ -185,11 +191,15 @@ const App = () => {
       ]);
 
       const orderDetailsCleaned = orderDetails.map((order) => ({
-        id: order.id.toNumber(),
+        id: order.orderId.toNumber(),
         timestamp: new Date(order.timestamp * 1000),
-        receiver: order.receiver.toNumber(),
-        amount: order.amount.toNumber(),
+        receiver: order.receiver,
+        amount: ethers.utils.formatEther(order.amount),
       }));
+      orderDetailsCleaned[0].status =
+        statusDict[
+          await getContract().viewOrderStatus(parseInt(selectedId.orderId, 10))
+        ];
       setSelectedOrder(orderDetailsCleaned);
     } catch (error) {
       console.error(error);
@@ -200,19 +210,31 @@ const App = () => {
     await handleNetworkCheck();
     try {
       const [idx, userStats, allStats, fee] = await Promise.all([
-        getContract().viewAllOrdersIdOfAddress(),
+        getContract().viewAllOrderIdsOfAddress(),
         getContract().viewUserCurrentStats(),
         getContract().viewTotalCurrentStats(),
         getContract().viewCurrentFee(),
       ]);
 
       const idxArray = idx.map((orderIds) => orderIds.toNumber());
-      const userArray = userStats.map((user) => user.toNumber());
-      const allArray = allStats.map((protocol) => protocol.toNumber());
+      const userArray = userStats.map((user, index) => {
+        if (index === 0) {
+          return user.toNumber();
+        } else if (index === 1) {
+          return ethers.utils.formatEther(user);
+        }
+      });
+      const allArray = allStats.map((protocol, index) => {
+        if (index === 0) {
+          return protocol.toNumber();
+        } else if (index === 1) {
+          return ethers.utils.formatEther(protocol);
+        }
+      });
       setmyOrderIds(idxArray);
       setMyStats(userArray);
       setProtocolStats(allArray);
-      setCurrentFee(fee.toNumber());
+      setCurrentFee(ethers.utils.formatEther(fee));
     } catch (error) {
       console.error(error);
     }
@@ -222,8 +244,8 @@ const App = () => {
     <div className="mainContainer">
       <div className="dataContainer">
         <div className="bio">
-          Current Fee: {currentFee} ETH - All-time Txns: {protocolStats[1]} -
-          All-time Volume: {protocolStats[2]} ETH
+          Current Fee: {currentFee} ETH - All-time Txns: {protocolStats[0]} -
+          All-time Volume: {protocolStats[1]} ETH
         </div>
         <div className="header">Double Transfer Protocol</div>
         <div className="bio">Protocol to mitigate ZeroTransfer attack</div>
@@ -238,8 +260,8 @@ const App = () => {
           ) : (
             <p>
               Hello {truncateEthAddress(currentAccount)}! You have completed{" "}
-              {myStats[1]} transaction(s) with a total volume of {myStats[2]}{" "}
-              using this protocol!
+              {myStats[0]} transaction(s) with a total volume of {myStats[1]}{" "}
+              ETH using this protocol!
             </p>
           )}
         </div>
@@ -249,7 +271,6 @@ const App = () => {
           }
           value={newOrder.address}
           name="newOrder"
-          type="text"
           className="textbox"
           placeholder="Address to transfer"
         />
@@ -257,11 +278,11 @@ const App = () => {
           onChange={(e) => setNewOrder({ ...newOrder, value: e.target.value })}
           value={newOrder.value}
           name="newOrder"
-          type="number"
           className="textbox"
+          type="int"
           placeholder="Exact amount to transfer in ETH"
         />
-        <button className="waveButton" onClick={createnewOrderFn}>
+        <button className="waveButton" onClick={createNewOrderFn}>
           CREATE THIS ORDER
         </button>
         <select
@@ -293,19 +314,45 @@ const App = () => {
               padding: "8px",
             }}
           >
+            <div
+              style={{
+                color:
+                  order.status === "CANCELLED"
+                    ? "red"
+                    : order.status === "COMPLETED"
+                    ? "green"
+                    : "inherit",
+                fontWeight: order.status === "CREATED" ? "bold" : "normal",
+              }}
+            >
+              Order Status: {order.status}
+            </div>
+
             <div>Order ID: {order.id}</div>
             <div>Created At: {order.timestamp.toString()}</div>
             <div>Recipient Address: {order.receiver}</div>
-            <div>Amount transfer: {order.amount}</div>
+            <div>Amount transfer: {order.amount} ETH</div>
           </div>
         ))}
-        <button className="waveButton" onClick={confirmCurrentOrderFn}>
+        <button
+          className="waveButton"
+          onClick={confirmCurrentOrderFn}
+          disabled={selectedOrder[0].status === "COMPLETED"}
+        >
           CONFIRM THIS ORDER
         </button>
-        <button className="waveButton" onClick={modifyCurrentReceiverFn}>
+        <button
+          className="waveButton"
+          onClick={modifyCurrentReceiverFn}
+          disabled={selectedOrder[0].status === "COMPLETED"}
+        >
           MODIFY THIS ORDER'S RECEIVER
         </button>
-        <button className="waveButton" onClick={cancelCurrentOrderFn}>
+        <button
+          className="waveButton"
+          onClick={cancelCurrentOrderFn}
+          disabled={selectedOrder[0].status === "COMPLETED"}
+        >
           CANCEL THIS ORDER
         </button>
         <div className="bio">
