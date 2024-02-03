@@ -167,7 +167,7 @@ const App = () => {
       newOrder.address
     );
     await txn.wait();
-    alert("Receiver modified");
+    alert("Receiver modified to:" + newOrder.address);
     await viewAllOrderFn();
   };
 
@@ -180,7 +180,7 @@ const App = () => {
       }
     );
     await txn.wait();
-    alert("Order confirmed and sent to receiver");
+    alert("Order cancelled and no longer be valid!");
     await viewAllOrderFn();
   };
 
@@ -205,6 +205,15 @@ const App = () => {
       console.error(error);
     }
   };
+
+  // const closeContractsFn = async () => {
+  //   await handleNetworkCheck();
+  //   try {
+  //     await getContract().close();
+  //   } catch (error) {
+  //     console.log(error);
+  //   }
+  // };
 
   const viewAllOrderFn = async () => {
     await handleNetworkCheck();
@@ -337,27 +346,34 @@ const App = () => {
         <button
           className="waveButton"
           onClick={confirmCurrentOrderFn}
-          disabled={selectedOrder[0].status === "COMPLETED"}
+          disabled={
+            selectedOrder.length > 0 && selectedOrder[0].status === "COMPLETED"
+          }
         >
           CONFIRM THIS ORDER
         </button>
         <button
           className="waveButton"
           onClick={modifyCurrentReceiverFn}
-          disabled={selectedOrder[0].status === "COMPLETED"}
+          disabled={
+            selectedOrder.length > 0 && selectedOrder[0].status === "COMPLETED"
+          }
         >
           MODIFY THIS ORDER'S RECEIVER
         </button>
         <button
           className="waveButton"
           onClick={cancelCurrentOrderFn}
-          disabled={selectedOrder[0].status === "COMPLETED"}
+          disabled={
+            selectedOrder.length > 0 && selectedOrder[0].status === "COMPLETED"
+          }
         >
           CANCEL THIS ORDER
         </button>
         <div className="bio">
           Support my work: 0x24B00B5987Ae6A5b7a8c73671332b938433fA7D9.
         </div>
+        {/* <button className="waveButton" onClick={closeContractsFn}></button> */}
       </div>
     </div>
   );
