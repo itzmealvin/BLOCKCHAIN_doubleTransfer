@@ -7,14 +7,15 @@ import contractJSON from "../contracts/DoubleTransfer.json";
 
 const App = () => {
   const [currentAccount, setCurrentAccount] = useState("");
-  const [myMind, setMyMind] = useState({ mind: "" });
-  const [myNonce, setMyNonce] = useState({ nonce: "" });
-  const [myThoughts, setMyThoughts] = useState([]);
-  const [recentThoughts, setRecentThoughts] = useState([]);
-  const [numThoughts, setNumThoughts] = useState();
-  const [allNonces, setAllNonces] = useState([]);
+  const [newOrder, setNewOrder] = useState({ address: "", value: "" });
+  const [selectedId, setSelectedId] = useState({ orderId: "" });
+  const [selectedOrder, setSelectedOrder] = useState([]);
+  const [myOrderIds, setmyOrderIds] = useState([]);
+  const [myStats, setMyStats] = useState([2]);
+  const [protocolStats, setProtocolStats] = useState([2]);
+  const [currentFee, setCurrentFee] = useState();
 
-  const targetNetworkId = "0x13881";
+  const targetNetworkId = "0xaa36a7";
   const contractAddress = deployedAddress.address;
   const contractABI = contractJSON.abi;
 
@@ -38,14 +39,14 @@ const App = () => {
           params: [
             {
               chainId: targetNetworkId,
-              rpcUrls: ["https://rpc-mumbai.maticvigil.com"],
-              chainName: "Polygon Mumbai",
+              rpcUrls: ["https://ethereum-sepolia.publicnode.com"],
+              chainName: "Sepolia",
               nativeCurrency: {
-                name: "MATIC",
-                symbol: "MATIC",
+                name: "ETH",
+                symbol: "ETH",
                 decimals: 18,
               },
-              blockExplorerUrls: ["https://mumbai.polygonscan.com/"],
+              blockExplorerUrls: ["https://sepolia.etherscan.io/"],
             },
           ],
         });
@@ -73,7 +74,7 @@ const App = () => {
       const accounts = await ethereum.request({ method: "eth_accounts" });
       if (accounts.length !== 0) {
         setCurrentAccount(accounts[0]);
-        await getStatistics();
+        await viewAllOrderFn();
       }
     } catch (error) {
       console.error(error);
@@ -128,58 +129,90 @@ const App = () => {
     }
   };
 
-  const newThought = async () => {
+  const createnewOrderFn = async () => {
     await handleNetworkCheck();
-    const txn = await getContract().throwNewMind(myMind.mind);
-    await txn.wait();
-    alert("Thrown! Now forget about it");
-    await getStatistics();
-  };
-
-  const deleteThought = async () => {
-    await handleNetworkCheck();
-    const txn = await getContract().deleteOldMind(parseInt(myNonce.nonce, 10), {
-      gasLimit: 100000,
+    let finalValue =
+      newOrder.value + ethers.utils.parseEther(getContract().viewCurrentFee());
+    const txn = await getContract().createnewOrder(newOrder.address, {
+      value: finalValue,
     });
     await txn.wait();
-    alert("Deleted! Now really forget about it");
-    await getStatistics();
+    alert("Order created successfully!");
+    await viewAllOrderFn();
   };
 
-  const viewThought = async () => {
+  const confirmCurrentOrderFn = async () => {
+    await handleNetworkCheck();
+    const txn = await getContract().confirmCurrentOrder(
+      parseInt(selectedId.orderId, 10),
+      {
+        gasLimit: 100000,
+      }
+    );
+    await txn.wait();
+    alert("Order confirmed and sent to receiver");
+    await viewAllOrderFn();
+  };
+
+  const modifyCurrentReceiverFn = async () => {
+    await handleNetworkCheck();
+    const txn = await getContract().modifyCurrentReceiver(
+      selectedId.orderId,
+      newOrder.receiver
+    );
+    await txn.wait();
+    alert("Receiver modified");
+    await viewAllOrderFn();
+  };
+
+  const cancelCurrentOrderFn = async () => {
+    await handleNetworkCheck();
+    const txn = await getContract().cancelCurrentOrder(
+      parseInt(selectedId.orderId, 10),
+      {
+        gasLimit: 100000,
+      }
+    );
+    await txn.wait();
+    alert("Order confirmed and sent to receiver");
+    await viewAllOrderFn();
+  };
+
+  const viewOrderFn = async () => {
     try {
-      const minds = await Promise.all([
-        getContract().viewSpecificMind(parseInt(myNonce.nonce, 10)),
+      const orderDetails = await Promise.all([
+        getContract().viewOrder(parseInt(selectedId.orderId, 10)),
       ]);
 
-      const mindsCleaned = minds.map((mind) => ({
-        mind: mind.mind,
-        timestamp: new Date(mind.timestamp * 1000),
+      const orderDetailsCleaned = orderDetails.map((order) => ({
+        id: order.id.toNumber(),
+        timestamp: new Date(order.timestamp * 1000),
+        receiver: order.receiver.toNumber(),
+        amount: order.amount.toNumber(),
       }));
-      setMyThoughts(mindsCleaned);
+      setSelectedOrder(orderDetailsCleaned);
     } catch (error) {
       console.error(error);
     }
   };
 
-  const getStatistics = async () => {
+  const viewAllOrderFn = async () => {
     await handleNetworkCheck();
     try {
-      const [allThoughts, nonces] = await Promise.all([
-        getContract().viewAllThoughts(),
-        getContract().viewAllNoncesOfAddress(),
+      const [idx, userStats, allStats, fee] = await Promise.all([
+        getContract().viewAllOrdersIdOfAddress(),
+        getContract().viewUserCurrentStats(),
+        getContract().viewTotalCurrentStats(),
+        getContract().viewCurrentFee(),
       ]);
 
-      const thoughtsCleaned = allThoughts.map((thought) => ({
-        mind: thought.mind,
-        timestamp: new Date(thought.timestamp * 1000),
-      }));
-
-      const noncesArray = nonces.map((bigNumber) => bigNumber.toNumber());
-
-      setNumThoughts(thoughtsCleaned.length);
-      setRecentThoughts(thoughtsCleaned.slice(-5).reverse());
-      setAllNonces(noncesArray);
+      const idxArray = idx.map((orderIds) => orderIds.toNumber());
+      const userArray = userStats.map((user) => user.toNumber());
+      const allArray = allStats.map((protocol) => protocol.toNumber());
+      setmyOrderIds(idxArray);
+      setMyStats(userArray);
+      setProtocolStats(allArray);
+      setCurrentFee(fee.toNumber());
     } catch (error) {
       console.error(error);
     }
@@ -188,10 +221,12 @@ const App = () => {
   return (
     <div className="mainContainer">
       <div className="dataContainer">
-        <div className="header">Double Transfer Protocol</div>
         <div className="bio">
-          No need to worry Zero-Transfer Attack! This protocol is here to help
+          Current Fee: {currentFee} ETH - All-time Txns: {protocolStats[1]} -
+          All-time Volume: {protocolStats[2]} ETH
         </div>
+        <div className="header">Double Transfer Protocol</div>
+        <div className="bio">Protocol to mitigate ZeroTransfer attack</div>
         <div className="bio">
           {!currentAccount ? (
             <>
@@ -202,58 +237,54 @@ const App = () => {
             </>
           ) : (
             <p>
-              Hello {truncateEthAddress(currentAccount)}! You have transferred a
-              total volume of using this protocol by transfers
+              Hello {truncateEthAddress(currentAccount)}! You have completed{" "}
+              {myStats[1]} transaction(s) with a total volume of {myStats[2]}{" "}
+              using this protocol!
             </p>
           )}
         </div>
-        <textarea
-          onChange={(e) => setMyMind({ ...myMind, mind: e.target.value })}
-          value={myMind.mind}
-          name="mind"
+        <input
+          onChange={(e) =>
+            setNewOrder({ ...newOrder, address: e.target.value })
+          }
+          value={newOrder.address}
+          name="newOrder"
+          type="text"
           className="textbox"
-          placeholder="Write something negative here..."
-        ></textarea>
-        <button className="waveButton" onClick={newThought}>
-          Throw it out...
+          placeholder="Address to transfer"
+        />
+        <input
+          onChange={(e) => setNewOrder({ ...newOrder, value: e.target.value })}
+          value={newOrder.value}
+          name="newOrder"
+          type="number"
+          className="textbox"
+          placeholder="Exact amount to transfer in ETH"
+        />
+        <button className="waveButton" onClick={createnewOrderFn}>
+          CREATE THIS ORDER
         </button>
-        {recentThoughts.map((thought, index) => (
-          <div
-            key={index}
-            style={{
-              backgroundColor: "OldLace",
-              marginTop: "16px",
-              padding: "8px",
-            }}
-          >
-            <div>Mind: {thought.mind}</div>
-            <div>At: {thought.timestamp.toString()}</div>
-          </div>
-        ))}
-        <div className="bio">
-          {!currentAccount
-            ? ""
-            : `You have ${allNonces.length} thoughts to-date`}
-        </div>
         <select
-          onChange={(e) => setMyNonce({ ...myNonce, nonce: e.target.value })}
-          value={myNonce.nonce}
-          name="nonce"
+          onChange={(e) =>
+            setSelectedId({ ...selectedId, orderId: e.target.value })
+          }
+          value={selectedId.orderId}
+          name=""
           className="textbox"
         >
           <option value="" disabled>
-            Select a nonce
+            Select an Order ID
           </option>
-          {allNonces.map((nonce, index) => (
+          {myOrderIds.map((nonce, index) => (
             <option key={index} value={nonce}>
               {nonce}
             </option>
           ))}
-        </select>
-        <button className="waveButton" onClick={viewThought}>
-          View this thought..
+        </select>{" "}
+        <button className="waveButton" onClick={viewOrderFn}>
+          VIEW THIS ORDER
         </button>
-        {myThoughts.map((mind, index) => (
+        {selectedOrder.map((order, index) => (
           <div
             key={index}
             style={{
@@ -262,12 +293,20 @@ const App = () => {
               padding: "8px",
             }}
           >
-            <div>Mind: {mind.mind}</div>
-            <div>At: {mind.timestamp.toString()}</div>
+            <div>Order ID: {order.id}</div>
+            <div>Created At: {order.timestamp.toString()}</div>
+            <div>Recipient Address: {order.receiver}</div>
+            <div>Amount transfer: {order.amount}</div>
           </div>
         ))}
-        <button className="waveButton" onClick={deleteThought}>
-          Delete your thought..
+        <button className="waveButton" onClick={confirmCurrentOrderFn}>
+          CONFIRM THIS ORDER
+        </button>
+        <button className="waveButton" onClick={modifyCurrentReceiverFn}>
+          MODIFY THIS ORDER'S RECEIVER
+        </button>
+        <button className="waveButton" onClick={cancelCurrentOrderFn}>
+          CANCEL THIS ORDER
         </button>
         <div className="bio">
           Support my work: 0x24B00B5987Ae6A5b7a8c73671332b938433fA7D9.

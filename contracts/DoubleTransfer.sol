@@ -130,12 +130,16 @@ contract DoubleTransfer {
     }
 
     // view all orders of an address
-    function viewAllOrdersOf() external view returns (Order[] memory) {
-        Order[] memory results = new Order[](userStats[msg.sender][1]);
+    function viewAllOrdersIdOfAddress()
+        external
+        view
+        returns (uint256[] memory)
+    {
+        uint256[] memory results = new uint256[](userStats[msg.sender][1]);
         uint counter = 0;
         for (uint i = 0; i < allOrders.length; i++) {
             if (orderSender[i] == msg.sender) {
-                results[counter] = allOrders[i];
+                results[counter] = i;
                 counter++;
             }
         }
@@ -150,6 +154,11 @@ contract DoubleTransfer {
     // view current sender nonces
     function viewTotalCurrentStats() external view returns (uint[2] memory) {
         return totalStats;
+    }
+
+    // view current fee
+    function viewCurrentFee() public view returns (uint256) {
+        return fee;
     }
 
     // FOR OWNER: view available fee to withdraw
