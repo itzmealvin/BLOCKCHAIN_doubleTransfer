@@ -24,7 +24,7 @@ async function main() {
 
   const Token = await ethers.getContractFactory("DoubleTransfer");
   const token = await Token.deploy({
-    value: ethers.parseEther("0.1"),
+    value: hre.ethers.utils.parseEther("0.1"),
   });
   await token.deployed();
 
@@ -50,7 +50,7 @@ function saveFrontendFiles(token) {
 
   fs.writeFileSync(
     path.join(contractsDir, "contract-address.json"),
-    JSON.stringify({ DoubleTransfer: token.address }, undefined, 2)
+    JSON.stringify({ address: token.address }, undefined, 2)
   );
 
   const TokenArtifact = artifacts.readArtifactSync("DoubleTransfer");
