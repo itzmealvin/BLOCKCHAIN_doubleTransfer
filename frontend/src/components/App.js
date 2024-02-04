@@ -216,15 +216,6 @@ const App = () => {
     }
   };
 
-  // const closeContractsFn = async () => {
-  //   await handleNetworkCheck();
-  //   try {
-  //     await getContract().close();
-  //   } catch (error) {
-  //     console.log(error);
-  //   }
-  // };
-
   const viewAllOrderFn = async () => {
     await handleNetworkCheck();
     try {
@@ -251,6 +242,10 @@ const App = () => {
         }
       });
       setmyOrderIds(idxArray);
+      setSelectedId({
+        orderId: idxArray.length > 0 ? idxArray.slice(-1)[0] : "",
+      });
+      viewOrderFn();
       setMyStats(userArray);
       setProtocolStats(allArray);
       setCurrentFee(ethers.utils.formatEther(fee));
@@ -263,8 +258,8 @@ const App = () => {
     <div className="mainContainer">
       <div className="dataContainer">
         <div className="bio">
-          Current Fee: {currentFee} ETH - All-time Txns: {protocolStats[0]} -
-          All-time Volume: {protocolStats[1]} ETH
+          Current Fee: {currentFee} ETH - All-time Order(s): {protocolStats[0]}{" "}
+          - All-time Volume: {protocolStats[1]} ETH
         </div>
         <div className="header">Double Transfer Protocol</div>
         <div className="bio">Protocol to mitigate ZeroTransfer attack</div>
@@ -278,9 +273,9 @@ const App = () => {
             </>
           ) : (
             <p>
-              Hello {truncateEthAddress(currentAccount)}! You have completed{" "}
-              {myStats[0]} transaction(s) with a total volume of {myStats[1]}{" "}
-              ETH using this protocol!
+              Hello {truncateEthAddress(currentAccount)}! You have made{" "}
+              {myStats[0]} order(s) with a total volume of {myStats[1]} ETH
+              using this protocol!
             </p>
           )}
         </div>
@@ -383,7 +378,6 @@ const App = () => {
         <div className="bio">
           Support my work: 0x24B00B5987Ae6A5b7a8c73671332b938433fA7D9.
         </div>
-        {/* <button className="waveButton" onClick={closeContractsFn}></button> */}
       </div>
     </div>
   );
