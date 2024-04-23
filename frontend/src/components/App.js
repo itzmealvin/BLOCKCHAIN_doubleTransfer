@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
+import React, { useEffect, useState } from "react";
 import truncateEthAddress from "truncate-eth-address";
-import "./App.css";
-import deployedAddress from "../contracts/contract-address.json";
 import contractJSON from "../contracts/DoubleTransfer.json";
+import deployedAddress from "../contracts/contract-address.json";
+import "./App.css";
 
 const App = () => {
   const [currentAccount, setCurrentAccount] = useState("");
